@@ -1,11 +1,11 @@
-# CS305 Computer Networks Lab 3 Assignment
+# CS305 Lab Assignment 3.3: Web File Browser
 
-谨以此 Repo 安葬 CS305 Lab 3 DDL 前我没修好的 Bugs！
+## Runtime Environment
 
-## 1. 测试用例一定要尽量全面充分
+Python 3.7+ is expected.
 
-## 2. 不要等到 DDL 当天才开始敲代码
+## Usage
 
-## 3. 若条件允许请写单元测试
-
-## 4. 留心出题人故意挖的坑
+```bash
+python main.py
+```
