@@ -12,6 +12,7 @@ import logging
 
 import web
 
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(asctime)s: %(message)s')
     if sys.version_info < (3, 4):
@@ -19,5 +20,5 @@ if __name__ == '__main__':
         sys.exit(-1)
     elif sys.version_info < (3, 7):
         logging.warning('Python 3.7+ is expected')
-    server = web.HttpServer(host='127.0.0.1', port=8080)
+    server = web.HttpServer(host='localhost', port=8080)
     server.run()

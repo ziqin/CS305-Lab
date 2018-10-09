@@ -22,7 +22,7 @@ def render_dir(requested_path: str) -> str:
 
     def path2link(file: str):
         quoted_path = urllib.parse.quote(requested_path + path_linker + file)
-        return '<li><a href="{}">{}</a></li>'.format(quoted_path, file)
+        return '<li><a href="{0}">{1}</a></li>'.format(quoted_path, file)
     lis = ''.join(map(path2link, os.listdir('.' + requested_path)))
     return html_doc.format(requested_path, requested_path + '../', lis)
 
@@ -39,3 +39,15 @@ def render_err(status: int, message: str = None):
     if not message:
         message = ''
     return html_doc.format(status, web.HttpResponse.STATUS[status], message)
+
+
+def render_redirect(status: int, new_url):
+    html_doc = \
+'''
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>{0} {1}</title></head>
+<body><h1>{0} {1}</h1><hr><p>Please refer to <a href="{2}">{3}</a></p></body>
+</html>
+'''
+    return html_doc.format(status, web.HttpResponse.STATUS[status], new_url, urllib.parse.unquote(new_url))

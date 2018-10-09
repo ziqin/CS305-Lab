@@ -1,4 +1,4 @@
-# CS305 Lab Assignment 3.3: Web File Browser
+# CS305 Lab Assignment 4.3: Web File Browser
 
 ## Runtime Environment
 

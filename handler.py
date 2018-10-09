@@ -1,75 +1,84 @@
 import logging
 import mimetypes
 import os
+import urllib.parse
 
 import page_render
 import web
 
 
+def handle_err(status: int, message: str=None):
+    resp = web.HttpResponse(status=status, mimetype='text/html; charset=utf-8')
+    resp.body = page_render.render_err(status, message)
+    resp.headers['Content-Length'] = len(resp.body)
+    resp.add_cookie('last-visit', '/', max_age=-1)
+    return resp
+
+
 class HandlerBase:
-    def __init__(self, methods: tuple=('GET',), is_dedicated: bool=False):
-        self.methods = methods
-        self.is_dedicated = is_dedicated
+    methods = 'GET',
 
-    def filtering(self, request) -> bool:
-        return request.method in self.methods
+    @classmethod
+    def filtering(cls, request) -> bool:
+        if cls is HandlerBase:
+            raise NotImplementedError
+        return request.method in cls.methods
 
-    def handle(self, request):
+    @classmethod
+    def process(cls, request, response):
         raise NotImplementedError
 
 
 class DirBrowseHandler(HandlerBase):
-    def __init__(self):
-        super().__init__(methods=('GET', 'HEAD'), is_dedicated=True)
+    methods = 'GET', 'HEAD'
 
-    def filtering(self, request) -> bool:
+    @classmethod
+    def filtering(cls, request) -> bool:
         return super().filtering(request) and os.path.isdir('.' + request.path)
 
-    def handle(self, request):
-        mime_type = 'text/html; charset=utf-8'
+    @classmethod
+    def process(cls, request, response):
+        response.status = 200
+        response.mime = 'text/html; charset=utf-8'
+        response.add_cookie(name='last-visit', value=urllib.parse.quote(request.path), max_age=7776000)  # 90 days
         if request.method == 'GET':
             doc = page_render.render_dir(request.path)
-            resp = web.HttpResponse(status=200, mimetype=mime_type)
-            resp.headers['Content-Length'] = len(doc)
-            resp.body = doc
-        else:  # request.method == 'HEAD':
-            resp = web.HttpResponse(status=200, mimetype=mime_type)
-        return resp
+            response.body = doc
+            response.headers['Content-Length'] = len(response.body)
 
 
 class FileTransHandler(HandlerBase):
-    def __init__(self):
-        super().__init__(methods=('GET', 'HEAD'), is_dedicated=True)
+    methods = 'GET', 'HEAD'
 
-    def filtering(self, request) -> bool:
+    @classmethod
+    def filtering(cls, request) -> bool:
         return super().filtering(request) and os.path.isfile('.' + request.path)
 
-    def handle(self, request):
-        mime = mimetypes.guess_type(request.path)[0] or 'application/octet-stream'
+    @classmethod
+    def process(cls, request, response):
+        response.status = 200
+        response.mime = mimetypes.guess_type(request.path)[0]
         if request.method == 'GET':
-            resp = web.HttpResponse(status=200, mimetype=mime)
             with open('.' + request.path, 'rb') as f:
                 file_content = f.read()
-            resp.headers['Content-Length'] = len(file_content)
-            resp.body = file_content
+            response.headers['Content-Length'] = len(file_content)
+            response.body = file_content
         else:  # request.method = 'HEAD'
-            resp = web.HttpResponse(status=200, mimetype=mime)
-            resp.headers['Content-Length'] = os.path.getsize('.' + request.path)
-
-        return resp
+            response.headers['Content-Length'] = os.path.getsize('.' + request.path)
 
 
 class FileRangeTransHandler(HandlerBase):
-    def __init__(self):
-        super().__init__(methods=('GET',), is_dedicated=True)
+    methods = 'GET',
 
-    def filtering(self, request) -> bool:
+    @classmethod
+    def filtering(cls, request) -> bool:
         return super().filtering(request) and \
                'Range' in request.headers and \
                request.headers['Range'].startswith('bytes=') and \
                os.path.isfile('.' + request.path)
 
-    def handle(self, request):
+    @classmethod
+    def process(cls, request, response):
         def parse_range(r):
             range_start, range_end = r.split('-')
             assert range_start != ''
@@ -81,7 +90,8 @@ class FileRangeTransHandler(HandlerBase):
 
         if len(ranges) > 1:
             logging.error('multipart/byteranges requests handling not implemented, returning complete resource')
-            return FileTransHandler().handle(request)
+            FileTransHandler.process(request, request)
+            return
         relative_path = '.' + request.path
         file_size = os.path.getsize(relative_path)
         begin, end = ranges[0]
@@ -92,15 +102,26 @@ class FileRangeTransHandler(HandlerBase):
         with open(relative_path, 'rb') as f:
             f.seek(begin)
             file_content = f.read(content_length)
-        mime = mimetypes.guess_type(request.path)[0] or 'application/octet-stream'
-        resp = web.HttpResponse(status=206, mimetype=mime)
-        resp.headers['Content-Range'] = 'bytes {}-{}/{}'.format(begin, end, file_size)
-        resp.body = file_content
-        return resp
+
+        response.status = 206
+        response.mime = mimetypes.guess_type(request.path)[0]
+        response.headers['Content-Range'] = 'bytes {}-{}/{}'.format(begin, end, file_size)
+        response.body = file_content
 
 
-def handle_err(status: int, message: str=None):
-    resp = web.HttpResponse(status=status, mimetype='text/html; charset=utf-8')
-    resp.body = page_render.render_err(status, message)
-    resp.headers['Content-Length'] = len(resp.body)
-    return resp
+class LastVisitHandler(HandlerBase):
+    methods = 'GET', 'HEAD'
+
+    @classmethod
+    def filtering(cls, request):
+        return super().filtering(request) and request.path == '/' and \
+            'last-visit' in request.cookies and 'Referer' not in request.headers
+
+    @classmethod
+    def process(cls, request, response):
+        last_visit = request.cookies['last-visit'].value
+        response.status = 302
+        response.mime = 'text/html; charset=utf-8'
+        response.headers['Location'] = last_visit
+        response.body = page_render.render_redirect(response.status, last_visit)
+        logging.info('redirect to %s', last_visit)

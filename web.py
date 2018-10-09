@@ -25,11 +25,31 @@ class RangeNotSatisfiableError(ValueError):
     pass
 
 
+class Cookie:
+    def __init__(self,
+                 name: str, value: str,
+                 max_age: int=None):
+        self.name = name
+        self.value = value
+        self.max_age = max_age
+
+    def __repr__(self):
+        if self.max_age:
+            return '{}={}; Max-Age={}; Path=/'.format(self.name, self.value, self.max_age)
+        else:
+            return '{}={}; Path=/'.format(self.name, self.value)
+
+
 class HttpServer:
     def __init__(self, host: str, port: int = 80):
         self.host = host
         self.port = port
-        self.handlers = [handler.FileRangeTransHandler(), handler.DirBrowseHandler(), handler.FileTransHandler()]
+        self.handlers = [
+            handler.FileRangeTransHandler,
+            handler.LastVisitHandler,
+            handler.DirBrowseHandler,
+            handler.FileTransHandler
+        ]
 
     def run(self):
         loop = asyncio.get_event_loop()
@@ -54,11 +74,12 @@ class HttpServer:
                 raise MethodNotAllowedError(request.method)
             if not os.path.exists('.' + request.path):
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), request.path)
+            response = HttpResponse(status=200)
             for hdl in self.handlers:
-                if hdl.filtering(request) and hdl.is_dedicated:
-                    response = hdl.handle(request)
+                if hdl.filtering(request):
+                    hdl.process(request, response)
                     break
-            logging.info('Sending response: %s', request.path)
+            logging.info('%d Sending response: %s', response.status, urllib.parse.quote(request.path))
         except asyncio.IncompleteReadError:
             pass
         except ParsingError:
@@ -100,6 +121,11 @@ class HttpRequest:
                 if field:
                     field_name, field_value = field.split(': ')
                     self.headers[field_name] = field_value
+            self.cookies = {}
+            if 'Cookie' in self.headers:
+                for pair in self.headers['Cookie'].split('; '):
+                    name, value = pair.split('=')
+                    self.cookies[name] = Cookie(name, value)
         except ValueError as e:
             raise ParsingError('failed to parse the HTTP request') from e
 
@@ -111,6 +137,7 @@ class HttpResponse:
         200: 'OK',
         206: 'Partial Content',
         301: 'Moved Permanently',
+        302: 'Found',
         400: 'Bad Request',
         404: 'Not Found',
         405: 'Method Not Allowed',
@@ -118,14 +145,15 @@ class HttpResponse:
         500: 'Internal Server Error'
     }
 
-    def __init__(self, status: int, mimetype: str):
+    def __init__(self, status: int, mimetype: str = None):
         self.status = status
         self.headers = {
             'Connection': 'close',
-            'Content-Type': mimetype,
             'Accept-Ranges': 'bytes',
             'Server': 'WebFileBrowser/2.0'
         }
+        self.mime = mimetype
+        self._cookies = {}
         self._body = b''
 
     @property
@@ -142,9 +170,25 @@ class HttpResponse:
         else:
             raise TypeError('response body should be bytes or string')
 
+    @property
+    def mime(self):
+        return self.headers['Content-Type']
+
+    @mime.setter
+    def mime(self, mime):
+        self.headers['Content-Type'] = mime or 'application/octet-stream'
+
+    def add_cookie(self, name, value, max_age=None):
+        self._cookies[name] = Cookie(name, value, max_age)
+
     def encode(self) -> bytes:
         self.headers['Date'] = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime())
         response_head = ['{} {} {}'.format(HttpResponse.PROTOCOL, self.status, HttpResponse.STATUS[self.status])]
         response_head.extend(('{}: {}'.format(name, value) for name, value in self.headers.items()))
+        debug_msg = []
+        for i in self._cookies:
+            debug_msg.append(self._cookies[i])
+        if self._cookies:
+            response_head.extend(('Set-Cookie: {}'.format(self._cookies[key]) for key in self._cookies))
         response_head.append('\r\n')
         return '\r\n'.join(response_head).encode() + self._body
