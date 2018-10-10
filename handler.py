@@ -11,7 +11,7 @@ def handle_err(status: int, message: str=None):
     resp = web.HttpResponse(status=status, mimetype='text/html; charset=utf-8')
     resp.body = page_render.render_err(status, message)
     resp.headers['Content-Length'] = len(resp.body)
-    resp.add_cookie('last-visit', '/', max_age=-1)
+    resp.add_cookie(web.Cookie('last-visit', '', max_age=-1, path='/'))  # delete cookie
     return resp
 
 
@@ -40,7 +40,9 @@ class DirBrowseHandler(HandlerBase):
     def process(cls, request, response):
         response.status = 200
         response.mime = 'text/html; charset=utf-8'
-        response.add_cookie(name='last-visit', value=urllib.parse.quote(request.path), max_age=7776000)  # 90 days
+        cookie = web.Cookie(name='last-visit', value=urllib.parse.quote(request.path),
+                            max_age=7776000, path='/')  # max age: 90 days
+        response.add_cookie(cookie)
         if request.method == 'GET':
             doc = page_render.render_dir(request.path)
             response.body = doc
@@ -115,7 +117,8 @@ class LastVisitHandler(HandlerBase):
     @classmethod
     def filtering(cls, request):
         return super().filtering(request) and request.path == '/' and \
-            'last-visit' in request.cookies and 'Referer' not in request.headers
+            'last-visit' in request.cookies and request.cookies['last-visit'].value != '/' and \
+            'Referer' not in request.headers
 
     @classmethod
     def process(cls, request, response):

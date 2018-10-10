@@ -23,7 +23,7 @@ def render_dir(requested_path: str) -> str:
     def path2link(file: str):
         quoted_path = urllib.parse.quote(requested_path + path_linker + file)
         return '<li><a href="{0}">{1}</a></li>'.format(quoted_path, file)
-    lis = ''.join(map(path2link, os.listdir('.' + requested_path)))
+    lis = ''.join(map(path2link, sorted(os.listdir('.' + requested_path), key=str.lower)))
     return html_doc.format(requested_path, requested_path + '../', lis)
 
 

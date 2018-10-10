@@ -26,18 +26,27 @@ class RangeNotSatisfiableError(ValueError):
 
 
 class Cookie:
-    def __init__(self,
-                 name: str, value: str,
-                 max_age: int=None):
+    def __init__(self, name: str, value: str,
+                 max_age: int=None, expires = None,
+                 path: str=None, domain: str=None):
         self.name = name
         self.value = value
         self.max_age = max_age
+        self.expires = expires
+        self.path = path
+        self.domain = domain
 
     def __repr__(self):
+        cookie_strs = ['{}={}'.format(self.name, self.value)]
         if self.max_age:
-            return '{}={}; Max-Age={}; Path=/'.format(self.name, self.value, self.max_age)
-        else:
-            return '{}={}; Path=/'.format(self.name, self.value)
+            cookie_strs.append('Max-Age={}'.format(self.max_age))
+        elif self.expires:
+            cookie_strs.append('Expires=' + time.strftime('%a, %d %b %Y %H:%M:%S GMT', self.expires))
+        if self.path:
+            cookie_strs.append('Path={}'.format(self.path))
+        if self.domain:
+            cookie_strs.append('Domain={}'.format(self.domain))
+        return '; '.join(cookie_strs)
 
 
 class HttpServer:
@@ -97,7 +106,7 @@ class HttpServer:
         except RangeNotSatisfiableError:
             logging.warning('Range not satisfiable')
             response = handler.handle_err(416)
-        except RuntimeError:
+        except Exception:
             logging.exception("Oops!")
             response = handler.handle_err(500)
         try:
@@ -178,8 +187,8 @@ class HttpResponse:
     def mime(self, mime):
         self.headers['Content-Type'] = mime or 'application/octet-stream'
 
-    def add_cookie(self, name, value, max_age=None):
-        self._cookies[name] = Cookie(name, value, max_age)
+    def add_cookie(self, cookie):
+        self._cookies[cookie.name] = cookie
 
     def encode(self) -> bytes:
         self.headers['Date'] = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime())
