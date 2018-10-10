@@ -7,6 +7,11 @@ import page_render
 import web
 
 
+# TODO:
+# 1. multi root directories support
+# 2. improve disk IO with aiofiles
+
+
 def handle_err(status: int, message: str=None):
     resp = web.HttpResponse(status=status, mimetype='text/html; charset=utf-8')
     resp.body = page_render.render_err(status, message)
@@ -16,6 +21,7 @@ def handle_err(status: int, message: str=None):
 
 
 class HandlerBase:
+    root_dir = '.'  # should not ends with '/'
     methods = 'GET',
 
     @classmethod
@@ -34,7 +40,7 @@ class DirBrowseHandler(HandlerBase):
 
     @classmethod
     def filtering(cls, request) -> bool:
-        return super().filtering(request) and os.path.isdir('.' + request.path)
+        return super().filtering(request) and os.path.isdir(cls.root_dir + request.path)
 
     @classmethod
     def process(cls, request, response):
@@ -44,7 +50,7 @@ class DirBrowseHandler(HandlerBase):
                             max_age=7776000, path='/')  # max age: 90 days
         response.add_cookie(cookie)
         if request.method == 'GET':
-            doc = page_render.render_dir(request.path)
+            doc = page_render.render_dir(cls.root_dir, request.path)
             response.body = doc
             response.headers['Content-Length'] = len(response.body)
 
@@ -54,19 +60,19 @@ class FileTransHandler(HandlerBase):
 
     @classmethod
     def filtering(cls, request) -> bool:
-        return super().filtering(request) and os.path.isfile('.' + request.path)
+        return super().filtering(request) and os.path.isfile(cls.root_dir + request.path)
 
     @classmethod
     def process(cls, request, response):
         response.status = 200
         response.mime = mimetypes.guess_type(request.path)[0]
         if request.method == 'GET':
-            with open('.' + request.path, 'rb') as f:
+            with open(cls.root_dir + request.path, 'rb') as f:
                 file_content = f.read()
             response.headers['Content-Length'] = len(file_content)
             response.body = file_content
         else:  # request.method = 'HEAD'
-            response.headers['Content-Length'] = os.path.getsize('.' + request.path)
+            response.headers['Content-Length'] = os.path.getsize(cls.root_dir + request.path)
 
 
 class FileRangeTransHandler(HandlerBase):
@@ -77,7 +83,7 @@ class FileRangeTransHandler(HandlerBase):
         return super().filtering(request) and \
                'Range' in request.headers and \
                request.headers['Range'].startswith('bytes=') and \
-               os.path.isfile('.' + request.path)
+               os.path.isfile(cls.root_dir + request.path)
 
     @classmethod
     def process(cls, request, response):
@@ -94,7 +100,7 @@ class FileRangeTransHandler(HandlerBase):
             logging.error('multipart/byteranges requests handling not implemented, returning complete resource')
             FileTransHandler.process(request, request)
             return
-        relative_path = '.' + request.path
+        relative_path = cls.root_dir + request.path
         file_size = os.path.getsize(relative_path)
         begin, end = ranges[0]
         end = end or file_size - 1

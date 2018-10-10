@@ -7,5 +7,5 @@ Python 3.7+ is expected.
 ## Usage
 
 ```bash
-python main.py
+python main.py <root-directory> [port]
 ```

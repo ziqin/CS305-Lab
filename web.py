@@ -27,7 +27,7 @@ class RangeNotSatisfiableError(ValueError):
 
 class Cookie:
     def __init__(self, name: str, value: str,
-                 max_age: int=None, expires = None,
+                 max_age: int=None, expires=None,
                  path: str=None, domain: str=None):
         self.name = name
         self.value = value
@@ -36,12 +36,12 @@ class Cookie:
         self.path = path
         self.domain = domain
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cookie_strs = ['{}={}'.format(self.name, self.value)]
         if self.max_age:
             cookie_strs.append('Max-Age={}'.format(self.max_age))
         elif self.expires:
-            cookie_strs.append('Expires=' + time.strftime('%a, %d %b %Y %H:%M:%S GMT', self.expires))
+            raise NotImplementedError  # TODO
         if self.path:
             cookie_strs.append('Path={}'.format(self.path))
         if self.domain:
@@ -50,15 +50,18 @@ class Cookie:
 
 
 class HttpServer:
-    def __init__(self, host: str, port: int = 80):
+    def __init__(self, host: str, port: int = 80, root_dir='.'):
         self.host = host
         self.port = port
-        self.handlers = [
-            handler.FileRangeTransHandler,
-            handler.LastVisitHandler,
-            handler.DirBrowseHandler,
-            handler.FileTransHandler
-        ]
+        self.root_dir = root_dir
+        self.handlers = list()
+
+    def add_handlers(self, *args):
+        for hdl in args:
+            if not issubclass(hdl, handler.HandlerBase) or hdl is handler.HandlerBase:
+                raise ValueError
+            hdl.root_dir = self.root_dir
+            self.handlers.append(hdl)
 
     def run(self):
         loop = asyncio.get_event_loop()
@@ -68,7 +71,7 @@ class HttpServer:
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            logging.info('Quit.')
+            logging.info('Quit')
         finally:
             server.close()
             loop.run_until_complete(server.wait_closed())
@@ -81,7 +84,7 @@ class HttpServer:
             request = HttpRequest(header_data)
             if request.method not in ('GET', 'HEAD'):
                 raise MethodNotAllowedError(request.method)
-            if not os.path.exists('.' + request.path):
+            if not os.path.exists(self.root_dir + request.path):
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), request.path)
             response = HttpResponse(status=200)
             for hdl in self.handlers:
@@ -159,7 +162,7 @@ class HttpResponse:
         self.headers = {
             'Connection': 'close',
             'Accept-Ranges': 'bytes',
-            'Server': 'WebFileBrowser/2.0'
+            'Server': 'WebFileBrowser/2.1'
         }
         self.mime = mimetype
         self._cookies = {}
