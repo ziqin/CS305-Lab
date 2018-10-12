@@ -16,7 +16,7 @@ import web
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(asctime)s: %(message)s')
+    logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s: %(message)s')
 
     if sys.version_info < (3, 4):
         print('Python 3.4+ is required', file=sys.stderr)

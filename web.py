@@ -197,9 +197,6 @@ class HttpResponse:
         self.headers['Date'] = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime())
         response_head = ['{} {} {}'.format(HttpResponse.PROTOCOL, self.status, HttpResponse.STATUS[self.status])]
         response_head.extend(('{}: {}'.format(name, value) for name, value in self.headers.items()))
-        debug_msg = []
-        for i in self._cookies:
-            debug_msg.append(self._cookies[i])
         if self._cookies:
             response_head.extend(('Set-Cookie: {}'.format(self._cookies[key]) for key in self._cookies))
         response_head.append('\r\n')

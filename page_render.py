@@ -36,7 +36,7 @@ def render_err(status: int, message: str = None):
 <body><h1>{0} {1}</h1><hr><p>{2}</p></body>
 </html>
 '''
-    if not message:
+    if message is None:
         message = ''
     return html_doc.format(status, web.HttpResponse.STATUS[status], message)
 
