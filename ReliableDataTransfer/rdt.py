@@ -228,7 +228,7 @@ class RDTSegment:
     HEADER_LEN = 6
     MAX_PAYLOAD_LEN = 1440
     SEGMENT_LEN = MAX_PAYLOAD_LEN + HEADER_LEN
-    SEQ_NUM_BOUND = 64
+    SEQ_NUM_BOUND = 256
 
     def __init__(self, payload: bytes, seq_num: int, ack_num: int, syn: bool=False, fin: bool=False, ack: bool=False):
         self.syn = syn
