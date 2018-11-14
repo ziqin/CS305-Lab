@@ -217,8 +217,8 @@ class RDTSegment:
 
     Ranges:
      - Payload Length           0 - 1440  (append zeros to the end if length < 1440)
-     - Sequence Number          0 - 63
-     - Acknowledgement Number   0 - 63
+     - Sequence Number          0 - 255
+     - Acknowledgement Number   0 - 255
 
     Checksum Algorithm:         16 bit one's complement of the one's complement sum
 
